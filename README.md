@@ -12,7 +12,7 @@ Statevector visualizer for Qiskit circuits.
 Install the package and its dependencies with pip:
 
 ```bash
-pip install qviz
+pip install git+https://github.com/naoto-aoki-fy/qviz
 ```
 
 For a local checkout, run:
