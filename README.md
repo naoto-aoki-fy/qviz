@@ -11,7 +11,7 @@ Statevector visualizer for Qiskit circuits.
 ## Minimal Example
 ```python
 from qiskit import QuantumCircuit
-from qc_statevis import visualize_circuit
+from qviz import visualize_circuit
 
 qc = QuantumCircuit(3)
 qc.h(0)
