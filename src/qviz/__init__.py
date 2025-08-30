@@ -266,78 +266,6 @@ class FFmpegWriter:
 
 
 # ------------------------------------------------------------
-# Measurement and conditional support (simulated on statevector)
-# ------------------------------------------------------------
-
-# def _measure_and_collapse(psi: np.ndarray, n: int, q: int, rng: np.random.Generator) -> Tuple[np.ndarray, int]:
-#     """Measure qubit q in the Z basis once and project the state (sampling)."""
-#     abs2 = np.abs(psi) ** 2
-#     idx = np.arange(psi.size, dtype=np.uint64)
-#     bit = ((idx >> q) & 1).astype(np.uint8)
-#     p1 = float(abs2[bit == 1].sum())
-#     p0 = max(0.0, 1.0 - p1)
-#     p1 = max(0.0, p1)
-#     total = p0 + p1
-#     if total <= 0:
-#         r = 0
-#         norm = 1.0
-#         out = psi.copy()
-#     else:
-#         r = int(rng.choice([0, 1], p=[p0 / total, p1 / total]))
-#         out = psi.copy()
-#         if r == 0:
-#             out[bit == 1] = 0
-#             norm = math.sqrt(p0) if p0 > 0 else 1.0
-#         else:
-#             out[bit == 0] = 0
-#             norm = math.sqrt(p1) if p1 > 0 else 1.0
-#     if norm <= 0:
-#         norm = 1.0
-#     out = out / norm
-#     return out, r
-
-
-# def _reset_qubit(psi: np.ndarray, n: int, q: int) -> np.ndarray:
-#     """reset q to |0> (measurement then X if outcome is |1>)."""
-#     abs2 = np.abs(psi) ** 2
-#     idx = np.arange(psi.size, dtype=np.uint64)
-#     bit = ((idx >> q) & 1).astype(np.uint8)
-#     p0 = float(abs2[bit == 0].sum())
-#     out = psi.copy()
-#     out[bit == 1] = 0
-#     norm = math.sqrt(p0) if p0 > 0 else 1.0
-#     return out / norm
-
-
-# def _eval_condition(inst: Instruction, classical_state: dict) -> bool:
-#     cond = getattr(inst, "condition", None)
-#     if not cond:
-#         return True
-#     target, val = cond
-#     if isinstance(target, Clbit):
-#         cur = int(classical_state.get(target, 0))
-#         return cur == int(val)
-#     bits = list(getattr(target, "bits", [])) or list(target)
-#     cur = 0
-#     for i, b in enumerate(bits):
-#         cur |= (int(classical_state.get(b, 0)) & 1) << i
-#     return cur == int(val)
-
-
-# def _clear_condition(inst: Instruction) -> Instruction:
-#     try:
-#         g = inst.copy()
-#         g.condition = None
-#         return g
-#     except Exception:
-#         try:
-#             g = inst.copy()
-#             setattr(g, "_condition", None)
-#             return g
-#         except Exception:
-#             return inst
-
-# ------------------------------------------------------------
 # Visualization core
 # ------------------------------------------------------------
 
@@ -409,7 +337,6 @@ def visualize_circuit(
     row_bits: Optional[int] = None,
     normalize_per_frame: bool = True,
     scale: int = 16,
-    # do_bit_swaps_at_end: bool = False,
     max_threads: Optional[int] = None,
     show_progress: bool = True,
     initial_state: Optional[Statevector | np.ndarray] = None,
@@ -436,8 +363,6 @@ def visualize_circuit(
         Normalize the maximum amplitude to 1 for each frame.
     scale : int
         Nearest-neighbor scale factor passed to FFmpeg.
-    # do_bit_swaps_at_end : bool
-    #     Append MSB↔LSB swap display at the end (useful for QFT reordering).
     max_threads : Optional[int]
         Number of threads for Aer. All cores by default.
     show_progress : bool
@@ -467,10 +392,6 @@ def visualize_circuit(
             normalize_per_frame=normalize_per_frame,
         )
         writer.write(frame)
-
-        # Classical register state and RNG (for measurement)
-        classical_state = {clb: 0 for clb in getattr(qc, "clbits", [])}
-        rng = np.random.default_rng(12345)
 
         # Iterate over instruction list
         data = list(qc.data)
@@ -564,19 +485,6 @@ def visualize_circuit(
                 writer.write(frame)
                 pbar.update(1)
                 continue
-
-            # Evaluate classical conditions
-            # if not _eval_condition(inst, classical_state):
-            #     frame = psi_to_rgb(
-            #         psi,
-            #         n_qubits=n,
-            #         row_bits=row_bits,
-            #         mapping=mapping,
-            #         mono_threshold=mono_threshold,
-            #         normalize_per_frame=normalize_per_frame,
-            #     )
-            #     writer.write(frame)
-            #     continue
 
             # For each step, build a circuit that applies the instruction once
             if interpolate > 1 and hasattr(inst, "power"):
