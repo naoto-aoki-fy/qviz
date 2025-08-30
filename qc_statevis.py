@@ -482,18 +482,16 @@ def visualize_circuit(
             qargs_list.append(qidxs)
             cargs_list.append(tuple(cargs))
 
-        iterator = tqdm(list(zip(steps, qargs_list, cargs_list)), desc="apply ops", disable=not show_progress)
+        pbar = tqdm(total=len(steps), desc="apply ops", disable=not show_progress)
 
-        for inst, qidxs, cargs in iterator:
+        for inst, qidxs, cargs in zip(steps, qargs_list, cargs_list):
             name = inst.name
             # 計測
             if name == "measure":
                 pairs = list(zip(qidxs, list(cargs))) if cargs else [(qidxs[0], None)]
+                step = 1.0 / interpolate
                 for q_i, cbit in pairs:
-                    # psi_arr = np.asarray(psi.data if isinstance(psi, Statevector) else psi)
-                    # psi_arr, outcome = _measure_and_collapse(psi_arr, n, int(q_i), rng)
-                    # psi = Statevector(psi_arr)
-                    for _ in range(interpolate//2):
+                    for _ in range(interpolate // 2):
                         frame = psi_to_rgb(
                             psi,
                             n_qubits=n,
@@ -503,13 +501,12 @@ def visualize_circuit(
                             normalize_per_frame=normalize_per_frame,
                         )
                         writer.write(frame)
+                        pbar.update(step)
                     qcs = QuantumCircuit(n, n)
                     qcs.initialize(psi)
                     qcs.measure(q_i, cbit)
                     psi = _run_and_get_state(sim, qcs)
-                    # if cbit is not None:
-                    #     classical_state[cbit] = int(outcome)
-                    for _ in range(interpolate//2):
+                    for _ in range(interpolate - interpolate // 2):
                         frame = psi_to_rgb(
                             psi,
                             n_qubits=n,
@@ -519,15 +516,14 @@ def visualize_circuit(
                             normalize_per_frame=normalize_per_frame,
                         )
                         writer.write(frame)
+                        pbar.update(step)
                 continue
 
             # reset（任意対応）
             if name == "reset":
+                step = 1.0 / interpolate
                 for q_i in qidxs:
-                    # psi_arr = np.asarray(psi.data if isinstance(psi, Statevector) else psi)
-                    # psi_arr = _reset_qubit(psi_arr, n, int(q_i))
-                    # psi = Statevector(psi_arr)
-                    for _ in range(interpolate//2):
+                    for _ in range(interpolate // 2):
                         frame = psi_to_rgb(
                             psi,
                             n_qubits=n,
@@ -537,11 +533,12 @@ def visualize_circuit(
                             normalize_per_frame=normalize_per_frame,
                         )
                         writer.write(frame)
+                        pbar.update(step)
                     qcs = QuantumCircuit(n, n)
                     qcs.initialize(psi)
                     qcs.reset(q_i, cbit)
                     psi = _run_and_get_state(sim, qcs)
-                    for _ in range(interpolate//2):
+                    for _ in range(interpolate - interpolate // 2):
                         frame = psi_to_rgb(
                             psi,
                             n_qubits=n,
@@ -551,6 +548,7 @@ def visualize_circuit(
                             normalize_per_frame=normalize_per_frame,
                         )
                         writer.write(frame)
+                        pbar.update(step)
                 continue
 
             # barrier / save はフレームだけ継続
@@ -564,6 +562,7 @@ def visualize_circuit(
                     normalize_per_frame=normalize_per_frame,
                 )
                 writer.write(frame)
+                pbar.update(1)
                 continue
 
             # 古典条件の評価
@@ -582,8 +581,8 @@ def visualize_circuit(
             # 命令を 1 ステップだけ適用する回路を都度生成
             if interpolate > 1 and hasattr(inst, "power"):
                 try:
-                    # frac = _clear_condition(inst).power(1.0 / interpolate)
                     frac = inst.power(1.0 / interpolate)
+                    step = 1.0 / interpolate
                     for _ in range(interpolate):
                         qcs = QuantumCircuit(n)
                         qcs.initialize(psi)
@@ -598,6 +597,7 @@ def visualize_circuit(
                             normalize_per_frame=normalize_per_frame,
                         )
                         writer.write(frame)
+                        pbar.update(step)
                     continue
                 except Exception:
                     # power 未対応などはフォールバック
@@ -605,7 +605,6 @@ def visualize_circuit(
 
             qcs = QuantumCircuit(n)
             qcs.initialize(psi)
-            # qcs.append(_clear_condition(inst), qidxs)
             qcs.append(inst, qidxs)
             psi = _run_and_get_state(sim, qcs)
             frame = psi_to_rgb(
@@ -617,6 +616,9 @@ def visualize_circuit(
                 normalize_per_frame=normalize_per_frame,
             )
             writer.write(frame)
+            pbar.update(1)
+
+        pbar.close()
 
 
 
