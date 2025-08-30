@@ -2,37 +2,37 @@
 Statevector visualizer for Qiskit circuits
 =========================================
 
-目的
-----
-任意の `QuantumCircuit` を「命令ごと（必要なら補間つき）」にシミュレートし、
-各ステップの状態ベクトルを画像化して動画 (mp4) に書き出します。
-既存コードをなるべく変更せず、完成済みの回路 `qc` をそのまま渡すだけで可視化できます。
+Purpose
+-------
+Simulate any `QuantumCircuit` step by step (with optional interpolation), render the
+statevector at each step as an image, and export the frames as an MP4 video.
+Existing circuits can be visualized by simply passing a finished circuit `qc`.
 
-主なポイント
-- *最小変更* : `visualize_circuit(qc, output="out.mp4")` だけで OK。
-- *補間* : ゲートが `.power()` をサポートしている場合、`interpolate>1` でなめらかな遷移を生成。
-- *並列* : Aer StatevectorSimulator に CPU スレッド数を自動設定。
-- *配色* : HSV（色相=位相）/ モノクロ（しきい値）を選択可能。
-- *レイアウト* : 2^row_bits × 2^(n-row_bits)。既定は正方形に近い形。
-- *ffmpeg* にパイプで高品質な mp4 を生成。
+Highlights
+- *Minimal changes*: just call `visualize_circuit(qc, output="out.mp4")`.
+- *Interpolation*: if a gate supports `.power()`, `interpolate>1` produces smooth transitions.
+- *Parallelization*: automatically sets the number of CPU threads for the Aer `StatevectorSimulator`.
+- *Coloring*: choose HSV (hue = phase) or monochrome (thresholded).
+- *Layout*: 2^row_bits × 2^(n-row_bits); defaults to a near square.
+- *FFmpeg*: pipe frames to FFmpeg for a high-quality MP4.
 
-注意
-- 状態ベクトル法なので量子ビット数が大きいとメモリ使用量が急増します。
-- `measure` など非ユニタリ命令はスキップします（状態ベクトルの枠組み上、コラプスの可視化は対象外）。
+Notes
+- The statevector method consumes a large amount of memory as qubit count increases.
+- Non-unitary instructions such as `measure` are skipped (collapse visualization is out of scope).
 
-依存
-- qiskit, qiskit-aer, numpy, tqdm, ffmpeg（実行バイナリ）
+Dependencies
+- qiskit, qiskit-aer, numpy, tqdm, ffmpeg (binary)
 
-使い方（最小）
-----------------
+Minimal usage
+-------------
 >>> from qiskit import QuantumCircuit
 >>> from qc_statevis import visualize_circuit
 >>> qc = QuantumCircuit(3)
 >>> qc.h(0); qc.cx(0,1); qc.cx(1,2)
 >>> visualize_circuit(qc, output="cx_chain.mp4", fps=8, interpolate=8)
 
-QFT の例（回路を用意して可視化）
----------------------------------
+QFT example (prepare circuit then visualize)
+--------------------------------------------
 >>> from qc_statevis import make_qft, visualize_circuit
 >>> qc = make_qft(12, do_swaps=True)
 >>> visualize_circuit(qc, output="qft.mp4", fps=8, interpolate=8,
@@ -60,18 +60,18 @@ try:
     from qiskit_aer.backends import StatevectorSimulator
 except Exception as e:  # pragma: no cover
     raise ImportError(
-        "qiskit-aer が必要です。`pip install qiskit-aer` を実行してください。\n"
+        "qiskit-aer is required. Run `pip install qiskit-aer`.\n"
         f"ImportError: {e}"
     )
 
 # ------------------------------------------------------------
-# 画像変換ユーティリティ
+# Image conversion utilities
 # ------------------------------------------------------------
 
 def _hsv_to_rgb_np(hsv: np.ndarray) -> np.ndarray:
-    """最小実装の HSV→RGB（vectorized / [0,1] 範囲）
-    hsv[...,0]=h（0..1, 色相）, hsv[...,1]=s, hsv[...,2]=v
-    戻り値は同形状の RGB [0,1]
+    """Minimal HSV→RGB implementation (vectorized / [0,1] range).
+    hsv[...,0]=h (0..1, hue), hsv[...,1]=s, hsv[...,2]=v
+    Returns RGB array in [0,1] with the same shape.
     """
     h = hsv[..., 0] * 6.0
     s = hsv[..., 1]
@@ -106,14 +106,14 @@ def _hsv_to_rgb_np(hsv: np.ndarray) -> np.ndarray:
 
 
 def magang_to_rgb(mag: np.ndarray, ang: np.ndarray, mapping: str = "hsv_value") -> np.ndarray:
-    """振幅 |ψ| と位相 ∠ψ から RGB 画像を生成（[0,1] float）。
+    """Generate an RGB image ([0,1] float) from amplitude |ψ| and phase ∠ψ.
 
     Parameters
     ----------
     mag : (H,W) ndarray
-        magnitude（0..1 にクリップ）
+        magnitude (clipped to 0..1)
     ang : (H,W) ndarray
-        radians（任意範囲）
+        radians (any range)
     mapping : {"hsv_value", "hsv_saturation"}
         - "hsv_value": hue=angle, sat=1, value=mag
         - "hsv_saturation": hue=angle, sat=mag, value=1
@@ -121,7 +121,7 @@ def magang_to_rgb(mag: np.ndarray, ang: np.ndarray, mapping: str = "hsv_value") 
     mag = np.asarray(mag, dtype=float)
     ang = np.asarray(ang, dtype=float)
     if mag.shape != ang.shape:
-        raise ValueError("mag と ang の形状は一致している必要があります")
+        raise ValueError("mag and ang must have the same shape")
 
     mag = np.clip(mag, 0.0, 1.0)
     two_pi = 2.0 * np.pi
@@ -134,7 +134,7 @@ def magang_to_rgb(mag: np.ndarray, ang: np.ndarray, mapping: str = "hsv_value") 
         s = mag
         v = np.ones_like(h)
     else:
-        raise ValueError("mapping は 'hsv_value' か 'hsv_saturation' を指定してください")
+        raise ValueError("mapping must be 'hsv_value' or 'hsv_saturation'")
 
     hsv = np.stack([h, s, v], axis=-1)
     rgb = _hsv_to_rgb_np(hsv)
@@ -150,10 +150,10 @@ def psi_to_rgb(
     mono_threshold: Optional[float] = None,
     normalize_per_frame: bool = True,
 ) -> np.ndarray:
-    """状態ベクトルを RGB[0..255] (uint8) 画像に変換。
+    """Convert a statevector to an RGB[0..255] (uint8) image.
 
-    - 画像サイズは 2^row_bits × 2^(n-row_bits)。既定で正方形に近い。
-    - bit 配列→2D への割り当ては単純な reshape（上位/下位の割当は row_bits で制御）。
+    - Image size is 2^row_bits × 2^(n-row_bits); defaults to a near square.
+    - Map bit array to 2D via simple reshape (row_bits controls high/low assignment).
     """
     if isinstance(psi, Statevector):
         sv = np.asarray(psi.data)
@@ -161,7 +161,7 @@ def psi_to_rgb(
         sv = np.asarray(psi)
 
     if row_bits is None:
-        # 正方形に近い形（ceil/floor）
+        # Make shape close to square (ceil/floor)
         row_bits = n_qubits // 2
 
     H = 1 << row_bits
@@ -188,7 +188,7 @@ def psi_to_rgb(
 
 
 # ------------------------------------------------------------
-# FFmpeg 書き出し
+# FFmpeg output
 # ------------------------------------------------------------
 
 @dataclass
@@ -198,7 +198,7 @@ class VideoParams:
     out_pix_fmt: str = "yuv420p"
     crf: int = 15
     preset: str = "veryfast"
-    scale: int = 16  # 最近傍で拡大（ピクセルアート風）
+    scale: int = 16  # nearest-neighbor scaling (pixel-art style)
 
 
 class FFmpegWriter:
@@ -211,7 +211,7 @@ class FFmpegWriter:
 
     def __enter__(self) -> "FFmpegWriter":
         if shutil.which("ffmpeg") is None:
-            raise RuntimeError("ffmpeg が見つかりません。インストールしてください。")
+            raise RuntimeError("ffmpeg not found. Please install it.")
         cmd = [
             "ffmpeg",
             "-y",
@@ -246,12 +246,12 @@ class FFmpegWriter:
 
     def write(self, frame_rgb_u8: np.ndarray) -> None:
         if self.proc is None or self.proc.stdin is None:
-            raise RuntimeError("FFmpegWriter が開始されていません")
+            raise RuntimeError("FFmpegWriter has not been started")
         h, w, c = frame_rgb_u8.shape
         if (w != self.width) or (h != self.height) or (c != 3):
-            raise ValueError(f"フレームサイズが不一致: got {w}x{h}x{c}, want {self.width}x{self.height}x3")
+            raise ValueError(f"Frame size mismatch: got {w}x{h}x{c}, want {self.width}x{self.height}x3")
         if frame_rgb_u8.dtype != np.uint8:
-            raise TypeError("フレームは uint8 の必要があります")
+            raise TypeError("Frame must be uint8")
         self.proc.stdin.write(frame_rgb_u8.tobytes())
 
     def __exit__(self, exc_type, exc, tb):
@@ -262,15 +262,15 @@ class FFmpegWriter:
                 pass
             ret = self.proc.wait()
             if ret != 0:
-                raise RuntimeError(f"ffmpeg が異常終了しました（コード {ret}）")
+                raise RuntimeError(f"ffmpeg exited with status {ret}")
 
 
 # ------------------------------------------------------------
-# 計測・条件分岐サポート（Statevector 上で模擬）
+# Measurement and conditional support (simulated on statevector)
 # ------------------------------------------------------------
 
 # def _measure_and_collapse(psi: np.ndarray, n: int, q: int, rng: np.random.Generator) -> Tuple[np.ndarray, int]:
-#     """qubit q を Z 基底で 1 回測定して状態を射影（サンプリング）。"""
+#     """Measure qubit q in the Z basis once and project the state (sampling)."""
 #     abs2 = np.abs(psi) ** 2
 #     idx = np.arange(psi.size, dtype=np.uint64)
 #     bit = ((idx >> q) & 1).astype(np.uint8)
@@ -298,7 +298,7 @@ class FFmpegWriter:
 
 
 # def _reset_qubit(psi: np.ndarray, n: int, q: int) -> np.ndarray:
-#     """reset q: |0> へ写像（測定→|1> なら X 相当）。"""
+#     """reset q to |0> (measurement then X if outcome is |1>)."""
 #     abs2 = np.abs(psi) ** 2
 #     idx = np.arange(psi.size, dtype=np.uint64)
 #     bit = ((idx >> q) & 1).astype(np.uint8)
@@ -338,7 +338,7 @@ class FFmpegWriter:
 #             return inst
 
 # ------------------------------------------------------------
-# 可視化の本体
+# Visualization core
 # ------------------------------------------------------------
 
 def _build_simulator(max_threads: Optional[int] = None) -> StatevectorSimulator:
@@ -355,19 +355,19 @@ def _build_simulator(max_threads: Optional[int] = None) -> StatevectorSimulator:
 
 
 def _run_and_get_state(sim: StatevectorSimulator, qc: QuantumCircuit) -> Statevector:
-    """1 回分の回路を実行して最終状態ベクトルを返す。
+    """Run a circuit once and return the final statevector.
 
-    Aer の "Duplicate key 'statevector'" を避けるため、
-    既定キーではなく固有キーで save し、index=0 から直接取り出す。
+    To avoid Aer's "Duplicate key 'statevector'" issue,
+    save with a unique key and fetch directly from index 0.
     """
     qc2 = qc.copy()
     save_key = "_sv"
-    # 同名 save が既にあれば追加しない（安全側）
+    # If a save with the same name already exists, do not add another (safety)
     if not any(getattr(inst, "name", "") == "save_statevector" for (inst, _q, _c) in qc2.data):
         qc2.save_statevector(save_key)
     else:
-        # 既にある場合でもキー衝突を避けるためラベル変更を試みる
-        # （互換のため try/except でフォールバック）
+        # Even if one exists, try to relabel to avoid key collisions
+        # (try/except fallback for compatibility)
         try:
             qc2.save_statevector(save_key)
         except Exception:
@@ -376,15 +376,15 @@ def _run_and_get_state(sim: StatevectorSimulator, qc: QuantumCircuit) -> Stateve
     job = sim.run(transpile(qc2, sim))
     result = job.result()
 
-    # 1 本のみ実行している想定なので index=0 から取り出す
+    # Assuming only one execution, retrieve from index=0
     data0 = result.data(0)
     vec = data0.get(save_key)
     if vec is None:
-        # 互換用フォールバック: 既定キーで探す
+        # Compatibility fallback: look for default key
         vec = data0.get("statevector")
         if vec is None:
-            raise RuntimeError("statevector が結果に見つかりませんでした（save_statevector の挿入に失敗）")
-    # Aer の仕様で list になることがあるので末尾を採用
+            raise RuntimeError("statevector not found in result (failed to insert save_statevector)")
+    # Aer may return a list, so take the last element
     if isinstance(vec, (list, tuple)):
         vec = vec[-1]
     return Statevector(vec)
@@ -414,36 +414,36 @@ def visualize_circuit(
     show_progress: bool = True,
     initial_state: Optional[Statevector | np.ndarray] = None,
 ) -> None:
-    """与えられた回路を「命令ごと」にシミュレートして動画を書き出す。
+    """Simulate the given circuit step by step and write a video.
 
     Parameters
     ----------
     qc : QuantumCircuit
-        可視化したい完成済みの回路。
+        The finished circuit to visualize.
     output : str
-        出力 mp4 のパス。
+        Path to the output mp4.
     fps : int
-        出力動画のフレームレート。`interpolate` と揃えると滑らか。
+        Frame rate of the output video. Matching `interpolate` yields smooth playback.
     interpolate : int
-        1 命令を何分割して描画するか（命令が `.power()` をサポートするときのみ有効）。
+        Number of substeps per instruction (effective only if the instruction supports `.power()`).
     mapping : {"hsv_value", "hsv_saturation"}
-        色の割り当て方式。色相=位相、明るさ/彩度=振幅。
+        Coloring method. Hue=phase; value/saturation=amplitude.
     mono_threshold : Optional[float]
-        しきい値を与えるとモノクロ表示（255/0）に切り替え。
+        Switch to monochrome (255/0) when amplitude exceeds this threshold.
     row_bits : Optional[int]
-        画像の行側ビット数（列側は n-row_bits）。既定は n//2。
+        Number of bits mapped to rows (columns use n-row_bits). Defaults to n//2.
     normalize_per_frame : bool
-        各フレームで最大振幅=1 に正規化（明るさの相対値が分かりやすい）。
+        Normalize the maximum amplitude to 1 for each frame.
     scale : int
-        FFmpeg での最近傍拡大倍率（ピクセルを大きく）。
+        Nearest-neighbor scale factor passed to FFmpeg.
     # do_bit_swaps_at_end : bool
-    #     最後に MSB↔LSB のスワップ表示を追加（QFT の並び替え用途）。
+    #     Append MSB↔LSB swap display at the end (useful for QFT reordering).
     max_threads : Optional[int]
-        Aer のスレッド数。未指定は全コア。
+        Number of threads for Aer. All cores by default.
     show_progress : bool
-        tqdm で進捗を表示。
+        Display progress with tqdm.
     initial_state : Optional[Statevector | np.ndarray]
-        初期状態。None のとき |0…0⟩。
+        Initial state; |0…0⟩ if None.
     """
 
     n = qc.num_qubits
@@ -453,7 +453,7 @@ def visualize_circuit(
 
     params = VideoParams(fps=fps, scale=scale)
     with FFmpegWriter(W, H, output, params) as writer:
-        # 初期状態フレーム
+        # Initial state frame
         if initial_state is None:
             psi = Statevector.from_label("0" * n)
         else:
@@ -468,11 +468,11 @@ def visualize_circuit(
         )
         writer.write(frame)
 
-        # 古典レジスタ状態・乱数器（測定のため）
+        # Classical register state and RNG (for measurement)
         classical_state = {clb: 0 for clb in getattr(qc, "clbits", [])}
         rng = np.random.default_rng(12345)
 
-        # 命令列を走査
+        # Iterate over instruction list
         data = list(qc.data)
         steps: Sequence[Instruction] = [inst for (inst, _q, _c) in data]
         qargs_list: Sequence[Tuple[int, ...]] = []
@@ -486,7 +486,7 @@ def visualize_circuit(
 
         for inst, qidxs, cargs in zip(steps, qargs_list, cargs_list):
             name = inst.name
-            # 計測
+            # Measurement
             if name == "measure":
                 pairs = list(zip(qidxs, list(cargs))) if cargs else [(qidxs[0], None)]
                 step = 1.0 / interpolate
@@ -519,7 +519,7 @@ def visualize_circuit(
                         pbar.update(step)
                 continue
 
-            # reset（任意対応）
+            # reset (optional support)
             if name == "reset":
                 step = 1.0 / interpolate
                 for q_i in qidxs:
@@ -551,7 +551,7 @@ def visualize_circuit(
                         pbar.update(step)
                 continue
 
-            # barrier / save はフレームだけ継続
+            # barrier / save only continue the frame
             if name in ("barrier", "save_statevector"):
                 frame = psi_to_rgb(
                     psi,
@@ -565,7 +565,7 @@ def visualize_circuit(
                 pbar.update(1)
                 continue
 
-            # 古典条件の評価
+            # Evaluate classical conditions
             # if not _eval_condition(inst, classical_state):
             #     frame = psi_to_rgb(
             #         psi,
@@ -578,7 +578,7 @@ def visualize_circuit(
             #     writer.write(frame)
             #     continue
 
-            # 命令を 1 ステップだけ適用する回路を都度生成
+            # For each step, build a circuit that applies the instruction once
             if interpolate > 1 and hasattr(inst, "power"):
                 try:
                     frac = inst.power(1.0 / interpolate)
@@ -600,7 +600,7 @@ def visualize_circuit(
                         pbar.update(step)
                     continue
                 except Exception:
-                    # power 未対応などはフォールバック
+                    # Fallback when power() is unsupported
                     pass
 
             qcs = QuantumCircuit(n)
@@ -623,7 +623,7 @@ def visualize_circuit(
 
 
 # ------------------------------------------------------------
-# 便利関数（初期状態サンプル / QFT 生成 / 測定例）
+# Utility functions (initial states / QFT generation / measurement example)
 # ------------------------------------------------------------
 
 def generate_random(n_qubits: int, seed: int = 12345) -> Statevector:
@@ -640,7 +640,7 @@ def generate_uniform(n_qubits: int) -> Statevector:
 
 
 def make_measurement(n_qubits: int) -> QuantumCircuit:
-    """測定回路の例: 各 qubit を H してから対応する古典ビットに測定"""
+    """Example measurement circuit: apply H to each qubit then measure to corresponding classical bit"""
     qc = QuantumCircuit(n_qubits, n_qubits)
     for j in range(n_qubits):
         qc.h(j)
@@ -650,10 +650,10 @@ def make_measurement(n_qubits: int) -> QuantumCircuit:
 
 
 def make_qft(n_qubits: int, *, do_swaps: bool = True) -> QuantumCircuit:
-    """素直な QFT（Phase+H、最後に swap）を生成。"""
+    """Generate a straightforward QFT (Phase+H, swap at the end)."""
     qc = QuantumCircuit(n_qubits)
     for j in range(n_qubits):
-        # 低いインデックス側(0..j-1)からの制御位相回転をターゲット j にかける
+        # Apply controlled phase rotations from lower indices (0..j-1) to target j
         for k in range(j):
             phi = math.pi / (2 ** (j - k))
             qc.append(PhaseGate(phi).control(1), [k, j])
@@ -665,10 +665,10 @@ def make_qft(n_qubits: int, *, do_swaps: bool = True) -> QuantumCircuit:
 
 
 # ------------------------------------------------------------
-# モジュール直実行時の簡単デモ
+# Simple demo when run as a script
 # ------------------------------------------------------------
 if __name__ == "__main__":
-    # 12 量子ビット QFT のデモ（約 4096 ピクセルのベース画像を 16 倍拡大して表示）
+    # Demo of 12-qubit QFT (base image ~4096 pixels scaled ×16)
     n = 12
     qc = make_qft(n, do_swaps=True)
     visualize_circuit(
