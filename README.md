@@ -8,6 +8,19 @@ Statevector visualizer for Qiskit circuits.
 - Export frames to MP4 through FFmpeg.
 - Minimal changes required: pass an existing `QuantumCircuit` to `visualize_circuit`.
 
+## Installation
+Install the package and its dependencies with pip:
+
+```bash
+pip install qviz
+```
+
+For a local checkout, run:
+
+```bash
+pip install .
+```
+
 ## Minimal Example
 ```python
 from qiskit import QuantumCircuit
