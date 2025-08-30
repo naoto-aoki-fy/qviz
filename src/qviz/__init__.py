@@ -482,7 +482,7 @@ def visualize_circuit(
             qargs_list.append(qidxs)
             cargs_list.append(tuple(cargs))
 
-        pbar = tqdm(total=len(steps), desc="apply ops", disable=not show_progress)
+        pbar = tqdm(total=len(steps), desc="apply ops", disable=not show_progress, bar_format='{l_bar}{bar}| {n:.3f}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}{postfix}]')
 
         for inst, qidxs, cargs in zip(steps, qargs_list, cargs_list):
             name = inst.name
